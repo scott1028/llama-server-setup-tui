@@ -1,0 +1,33 @@
+# Qwen3.8-Flash-Next (unsloth UD-Q4_K_XL) in thinking mode, for coding agents.
+# Copy this file to llama-server.args (next to the script), or pass it with --config <file>.
+# One llama serve option per line: "--option value" or "--option=value".
+# Blank lines and lines starting with "#" are skipped.
+# These override the script defaults; options on the command line override these.
+
+--model /media/T710_Data_ntfs/models/unsloth/Qwen3.8-Flash-Next-GGUF/Qwen3.8-Flash-Next-UD-Q4_K_XL-00001-of-00004.gguf
+--mmproj /media/T710_Data_ntfs/models/unsloth/Qwen3.8-Flash-Next-GGUF/mmproj-BF16.gguf
+# Text only: use this instead of --mmproj to free about 0.9 GB of VRAM.
+# --no-mmproj
+
+# Agent prompts grow every turn.
+--ctx-size 256000
+
+# Prompt cache on: each turn only prefills what is new.
+--cache-prompt
+# Hybrid model (3 of 4 layers keep a recurrent state): the cache can only be reused from a checkpoint.
+--ctx-checkpoints 32
+# Keeps the main conversation in RAM when a side request (title, subagent) takes the only slot.
+--cache-ram 16384
+
+# Thinking mode, values from https://unsloth.ai/docs/models/qwen3.8-next
+# Sampling values sent in a request override these.
+--reasoning on
+--reasoning-effort xhigh
+--temp 1.0
+--top-p 0.95
+--top-k 20
+--min-p 0.0
+
+# MTP speculative decoding; unsloth reports 1.3-1.7x faster generation.
+--spec-type draft-mtp
+--spec-draft-model /media/T710_Data_ntfs/models/unsloth/Qwen3.8-Flash-Next-GGUF/mtp-Qwen3.8-Flash-Next-shared-Q8_0.gguf
