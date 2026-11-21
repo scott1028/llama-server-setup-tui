@@ -22,6 +22,17 @@ SKIP_ITEM="(no mmproj)"
 # One "model<TAB>mmproj" per line, newest first; mmproj is empty for SKIP_ITEM.
 HISTORY_FILE="$SCRIPT_DIR/.cache/llama-server-history.tsv"
 HISTORY_SIZE=5
+# Passed to llama serve before the config file and command-line options.
+DEFAULT_ARGS=(
+  --host 127.0.0.1
+  --port 8888
+  --ctx-size 32768
+  --n-gpu-layers all
+  --parallel 1
+  --no-cache-prompt
+  --cache-ram 0
+  --ctx-checkpoints 0
+)
 
 cancel() {
   echo "Cancelled." >&2
@@ -62,7 +73,45 @@ pick_gguf() {
   done
 }
 
-# Take out --config; every other argument goes to llama serve as-is.
+# Print this script's own options and defaults; the llama serve help follows it.
+print_help() {
+  local arg separator=
+  cat <<EOF
+Usage: ${self##*/} [--config FILE] [llama serve options...]
+
+Pick a model and mmproj in a TUI (recent picks or a file browser), then run llama serve.
+
+Options handled by this script:
+  --config FILE, --config=FILE  Load llama serve options from FILE, one per line.
+                                Default: $DEFAULT_CONFIG (loaded when present).
+  -h, --help                    Show this help, then the llama serve help.
+
+Every other option goes to llama serve as-is (see below).
+-m/--model skips the model pick; -mm/--mmproj or --no-mmproj skips the mmproj pick.
+
+Defaults passed to llama serve (the config file overrides them, the command line overrides both):
+EOF
+  for arg in "${DEFAULT_ARGS[@]}"; do
+    if [[ $arg == -* ]]; then
+      printf '%s  %s' "$separator" "$arg"
+      separator=$'\n'
+    else
+      printf ' %s' "$arg"
+    fi
+  done
+  cat <<EOF
+
+
+Examples:
+  ${self##*/} --port 8899
+  ${self##*/} --config my-model.args
+
+----- llama serve --help -----
+
+EOF
+}
+
+# Take out --config and -h/--help; every other argument goes to llama serve as-is.
 config_file=$DEFAULT_CONFIG
 is_config_required=
 cli_args=()
@@ -78,6 +127,10 @@ while (($#)); do
       config_file=${1#*=}
       is_config_required=1
       shift
+      ;;
+    -h | --help)
+      print_help
+      exec "$LLAMA_BIN" serve --help
       ;;
     *)
       cli_args+=("$1")
@@ -182,13 +235,6 @@ export MALLOC_MMAP_THRESHOLD_=131072
 # so the config file overrides the defaults and the command line overrides both.
 exec "$LLAMA_BIN" serve \
   "${picked_args[@]}" \
-  --host 127.0.0.1 \
-  --port 8888 \
-  --ctx-size 32768 \
-  --n-gpu-layers all \
-  --parallel 1 \
-  --no-cache-prompt \
-  --cache-ram 0 \
-  --ctx-checkpoints 0 \
+  "${DEFAULT_ARGS[@]}" \
   "${config_args[@]}" \
   "${cli_args[@]}"

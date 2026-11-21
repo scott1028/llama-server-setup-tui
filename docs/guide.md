@@ -93,7 +93,22 @@ model 和 mmproj 都填了，執行 script 就直接啟動，不會開選單。�
 ```
 
 選單選的只有 model 和 mmproj，跟 script 預設不會重疊。
-接在 script 後面的參數（`--config` 除外）會原封不動加在最後面，例如 `./llama-server-setup-tui.sh --port 8899 --ctx-size 16384`。
+接在 script 後面的參數（`--config` 和 `-h` / `--help` 除外）會原封不動加在最後面，例如 `./llama-server-setup-tui.sh --port 8899 --ctx-size 16384`。
+
+### 想知道能加哪些參數
+
+`--help`（或 `-h`）會印出兩段說明：前段是 script 自己的參數，後段是 llama.cpp 的完整選項。就像點餐機先說明怎麼點，再附上廚房的整本菜單。
+
+```text
+./llama-server-setup-tui.sh --help
+  ├─ Usage 和 script 自己的參數：--config、-h / --help
+  ├─ script 預設帶給 llama serve 的參數：--host 127.0.0.1、--port 8888 ...
+  ├─ Examples
+  └─ ----- llama serve --help ----- 之後：llama.cpp 的完整說明
+```
+
+script 的部分在最上面，加 `| less` 就能從頭看。只印說明，不開選單，也不寫入最近使用紀錄。
+`llama` 不在 `PATH` 上時，一樣印出 `llama CLI not found ...` 並以 exit code 1 結束。
 
 ## 參考
 

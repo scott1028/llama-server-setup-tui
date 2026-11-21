@@ -27,6 +27,7 @@ chmod +x llama-server-setup-tui-v0.1.0-linux-x86_64
 ```
 
 也可以 clone 這個 repo 直接執行 `./llama-server-setup-tui.sh`，用法完全一樣。
+想先看能加哪些參數，執行 `./llama-server-setup-tui.sh --help`。
 
 選檔畫面從家目錄開始，用 `..` 可以走到任何地方。用過一次之後，下次會先看到最近用過的組合：
 
