@@ -12,7 +12,8 @@ jobs:
   linux-binary:
     runs-on: ubuntu-24.04
     env:
-      DIST: dist/llama-server-setup-tui-${{ github.ref_name }}-linux-x86_64
+      # The shallow checkout has no tags, so git describe cannot find the version.
+      VERSION: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v5
 
@@ -20,28 +21,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y shc
 
       - name: Build static binary
-        run: |
-          mkdir -p build dist
-          # shc cannot parse "#!/usr/bin/env bash", so build from a /bin/bash copy.
-          sed '1s|^#!.*|#!/bin/bash|' llama-server-setup-tui.sh > build/llama-server-setup-tui.sh
-          # -r: runs on other machines; -static: no glibc version dependency.
-          CFLAGS=-static shc -r -f build/llama-server-setup-tui.sh -o "$DIST"
-          file "$DIST"
+        run: make build
 
       - name: Smoke test
-        run: |
-          # A fake llama prints its args; a config next to the binary skips the TUI.
-          mkdir -p build/smoke/bin
-          printf '#!/bin/sh\necho "llama $*"\n' > build/smoke/bin/llama
-          chmod +x build/smoke/bin/llama
-          cp "$DIST" build/smoke/
-          printf '%s\n' '--model /models/test.gguf' '--no-mmproj' > build/smoke/llama-server.args
-          output=$(PATH="$PWD/build/smoke/bin:$PATH" "build/smoke/${DIST##*/}" --port 8899)
-          echo "$output"
-          [[ $output == *"llama serve --host 127.0.0.1"*"--model /models/test.gguf --no-mmproj --port 8899" ]]
+        run: make test
 
       - name: Checksum
-        run: cd dist && sha256sum "${DIST##*/}" > "${DIST##*/}.sha256"
+        run: make checksum
 
       - name: Publish release
         env:

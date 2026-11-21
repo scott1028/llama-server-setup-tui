@@ -94,7 +94,7 @@ http://127.0.0.1:8888/v1
 - 最近使用紀錄存在哪、怎麼更新
 - 記憶體實測數字，以及為什麼要設 `MALLOC_MMAP_THRESHOLD_`
 - 幾種特殊情況和限制
-- 發布新版本：打 tag 之後 GitHub Actions 怎麼產生 binary
+- 在本機用 `make` build binary，以及打 tag 之後 GitHub Actions 怎麼發布
 
 ## 授權
 

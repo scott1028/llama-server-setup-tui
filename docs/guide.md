@@ -157,6 +157,26 @@ model 和 mmproj 都填了，執行 script 就直接啟動，不會開選單。�
 - 想在 config 裡重新打開 prompt cache：SWA 架構的 model（例如 Gemma 4）除了 `--cache-prompt`，還要把 `--ctx-checkpoints` 設成大於 0，否則 `cache_n` 還是 `0`。實測同一張圖送兩次，Qwen3-VL 只加 `--cache-prompt`，第二次 `cache_n = 4072`；Gemma 4 再加 `--ctx-checkpoints 32`，第二次 `cache_n = 277`。
 - 紀錄裡的檔案已經不存在時（例如硬碟沒掛載），那一組不會顯示，但會留在紀錄檔裡繼續佔名額。
 
+## 在本機 build binary
+
+需要 `shc` 和 C 編譯器（Ubuntu：`sudo apt install shc build-essential`），然後在 repo 根目錄執行：
+
+```bash
+make        # 產生 dist/llama-server-setup-tui-<版本>-linux-<架構>
+make test   # 用假的 llama 跑 smoke test
+make clean  # 刪掉 build/ 和 dist/
+```
+
+`make checksum` 會在 `dist/` 多產生一個 `.sha256`。檔名裡的版本和架構可以用變數改：
+
+| 變數 | 預設值 | 用途 |
+|---|---|---|
+| `VERSION` | `git describe --tags --always --dirty`，拿不到時是 `dev` | 檔名裡的版本，例如 `v0.1.0`、`v0.1.0-1-g93869a5-dirty` |
+| `ARCH` | `uname -m` | 檔名裡的架構，例如 `x86_64` |
+| `SHC` | `shc` | shc 不在 `PATH` 上時，指定它的路徑 |
+
+例如 `make VERSION=v0.2.0`。`--dirty` 只看已追蹤的檔案，新增但還沒 `git add` 的檔案不算。
+
 ## 發布新版本
 
 在要發布的 commit 打 tag 並 push，GitHub Actions（`.github/workflows/release.yml`）就會產生 binary 並建立 Release：
@@ -168,6 +188,7 @@ git push origin v0.2.0
 
 - 觸發條件：push 符合 `v*` 的 tag。workflow 必須已經在那個 commit 裡。
 - 產物：`llama-server-setup-tui-<tag>-linux-x86_64` 和它的 `.sha256`，附在跟 tag 同名的 Release 上。只產生 x86_64。
-- 做法：用 Ubuntu 24.04 套件庫的 shc，以 `CFLAGS=-static shc -r` 編成靜態連結的 ELF。shc 看不懂 `#!/usr/bin/env bash`，所以先把第一行換成 `#!/bin/bash` 再編。
+- 做法：裝好 Ubuntu 24.04 套件庫的 shc，再依序跑 `make build`、`make test`、`make checksum`，跟本機 build 是同一套步驟。版本由 `VERSION=<tag>` 傳入，因為 CI 的 checkout 沒有抓 tag，`git describe` 拿不到版本。
+- Makefile 用 `CFLAGS=-static shc -r` 編成靜態連結的 ELF。shc 看不懂 `#!/usr/bin/env bash`，所以先把第一行換成 `#!/bin/bash` 再編。
 - 執行 binary 時，裡面的 script 還是交給 `/bin/bash` 跑，也一樣需要 `whiptail`、`find`、`awk` 這些指令。
-- 建立 Release 之前會先做 smoke test：用一個假的 `llama` 和放在 binary 旁邊的 config 跑一次，確認組出來的 `llama serve` 指令正確。
+- 建立 Release 之前會先跑 `make test`：用一個假的 `llama` 和放在 binary 旁邊的 config 跑一次，確認組出來的 `llama serve` 指令正確。
