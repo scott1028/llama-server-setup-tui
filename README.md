@@ -39,6 +39,7 @@ cd llama-server-setup-tui
 
 直接按 Enter 就是上一次的組合；選 `B` 進選檔畫面。
 ↑↓ 移動，Enter 確定，Esc 取消。選完 model 會接著選 mmproj，從 model 所在的資料夾開始。
+想完全跳過選單：把 `llama-server.args.example` 複製成 `llama-server.args`，填好 `--model` 和 `--mmproj`（或 `--no-mmproj`）。
 
 ## 試一下
 
@@ -87,6 +88,7 @@ http://127.0.0.1:8888/v1
 
 - 名詞解釋：mmproj、prefill、slot、context checkpoint
 - 每個啟動參數的用途，以及怎麼覆蓋
+- 用 config 檔預先填好參數：格式、載入順序、什麼時候跳過選單
 - 最近使用紀錄存在哪、怎麼更新
 - 記憶體實測數字，以及為什麼要設 `MALLOC_MMAP_THRESHOLD_`
 - 幾種特殊情況和限制

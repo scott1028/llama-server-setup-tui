@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # Pick a model and mmproj (from recent picks or a whiptail file browser), then serve
 # them with llama.cpp, all prompt caching off. Each request is prefilled from scratch.
-# Extra args are passed through and override the defaults, e.g. --port 8899.
+# Options from a config file (one per line) and the command line override the defaults,
+# e.g. --port 8899. When they already set the model and mmproj, no TUI is shown.
 set -euo pipefail
 
+# readlink -f keeps these next to the real script even when run through a symlink.
+SCRIPT_DIR=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+# Loaded when present; --config <file> loads another file instead.
+DEFAULT_CONFIG="$SCRIPT_DIR/llama-server.args"
 # The file browser starts here; use ".." to go anywhere else.
 MODELS_ROOT="$HOME"
 SKIP_ITEM="(no mmproj)"
 # One "model<TAB>mmproj" per line, newest first; mmproj is empty for SKIP_ITEM.
-# readlink -f keeps it next to the real script even when run through a symlink.
-HISTORY_FILE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.cache/llama-server-history.tsv"
+HISTORY_FILE="$SCRIPT_DIR/.cache/llama-server-history.tsv"
 HISTORY_SIZE=5
 
 cancel() {
@@ -20,11 +24,6 @@ cancel() {
 # type -P only matches executables on PATH, never aliases or functions.
 LLAMA_BIN=$(type -P llama) || {
   echo "llama CLI not found in PATH. Install llama.cpp so that 'llama serve' works." >&2
-  exit 1
-}
-# Without this check a missing whiptail would look like a Cancel.
-command -v whiptail >/dev/null || {
-  echo "whiptail not found. Install it, e.g. 'sudo apt install whiptail'." >&2
   exit 1
 }
 
@@ -56,32 +55,107 @@ pick_gguf() {
   done
 }
 
-# Recent picks whose files still exist.
-recent_models=()
-recent_mmprojs=()
-recent_items=()
-if [[ -f $HISTORY_FILE ]]; then
-  while IFS=$'\t' read -r recent_model recent_mmproj; do
-    [[ -f $recent_model && ( -z $recent_mmproj || -f $recent_mmproj ) ]] || continue
-    recent_models+=("$recent_model")
-    recent_mmprojs+=("$recent_mmproj")
-    mmproj_name=${recent_mmproj##*/}
-    recent_items+=("${#recent_models[@]}" "${recent_model##*/}  +  ${mmproj_name:-$SKIP_ITEM}")
-  done < "$HISTORY_FILE"
+# Take out --config; every other argument goes to llama serve as-is.
+config_file=$DEFAULT_CONFIG
+is_config_required=
+cli_args=()
+while (($#)); do
+  case $1 in
+    --config)
+      (($# >= 2)) || { echo "--config needs a file path." >&2; exit 1; }
+      config_file=$2
+      is_config_required=1
+      shift 2
+      ;;
+    --config=*)
+      config_file=${1#*=}
+      is_config_required=1
+      shift
+      ;;
+    *)
+      cli_args+=("$1")
+      shift
+      ;;
+  esac
+done
+
+# One option per line: "--opt value" or "--opt=value" (llama.cpp only takes the first form).
+# Blank lines and lines starting with "#" are skipped.
+config_args=()
+if [[ -f $config_file ]]; then
+  echo "config: $config_file"
+  while read -r line || [[ -n $line ]]; do
+    [[ -z $line || $line == \#* ]] && continue
+    option=${line%%[[:space:]=]*}
+    config_args+=("$option")
+    if [[ $line != "$option" ]]; then
+      read -r value <<< "${line:${#option}+1}"
+      config_args+=("$value")
+    fi
+  done < "$config_file"
+elif [[ -n $is_config_required ]]; then
+  echo "Config file not found: $config_file" >&2
+  exit 1
 fi
 
-choice=B
-if ((${#recent_items[@]})); then
-  choice=$(whiptail --title "Recent models" --menu "Pick a recent model + mmproj, or browse files." 0 0 0 \
-    "${recent_items[@]}" B "Browse files..." 3>&1 1>&2 2>&3) || cancel
-fi
+# A model or mmproj already set by the config or the command line skips its TUI step.
+model=
+mmproj=
+has_model=
+has_mmproj=
+given_args=("${config_args[@]}" "${cli_args[@]}")
+for ((i = 0; i < ${#given_args[@]}; i++)); do
+  case ${given_args[i]} in
+    -m | --model) model=${given_args[i + 1]:-}; has_model=1 ;;
+    -mm | --mmproj) mmproj=${given_args[i + 1]:-}; has_mmproj=1 ;;
+    --no-mmproj) mmproj=; has_mmproj=1 ;;
+  esac
+done
 
-if [[ $choice == B ]]; then
-  model=$(pick_gguf "Select model (.gguf)" "$MODELS_ROOT") || cancel
-  mmproj=$(pick_gguf "Select mmproj (.gguf)" "$(dirname "$model")" can_skip) || cancel
-else
-  model=${recent_models[choice - 1]}
-  mmproj=${recent_mmprojs[choice - 1]}
+picked_args=()
+if [[ -z $has_model || -z $has_mmproj ]]; then
+  # Without this check a missing whiptail would look like a Cancel.
+  command -v whiptail >/dev/null || {
+    echo "whiptail not found. Install it, e.g. 'sudo apt install whiptail'." >&2
+    exit 1
+  }
+
+  # Recent picks whose files still exist; offered only when neither is set yet.
+  recent_models=()
+  recent_mmprojs=()
+  recent_items=()
+  if [[ -z $has_model && -z $has_mmproj && -f $HISTORY_FILE ]]; then
+    while IFS=$'\t' read -r recent_model recent_mmproj; do
+      [[ -f $recent_model && ( -z $recent_mmproj || -f $recent_mmproj ) ]] || continue
+      recent_models+=("$recent_model")
+      recent_mmprojs+=("$recent_mmproj")
+      mmproj_name=${recent_mmproj##*/}
+      recent_items+=("${#recent_models[@]}" "${recent_model##*/}  +  ${mmproj_name:-$SKIP_ITEM}")
+    done < "$HISTORY_FILE"
+  fi
+
+  choice=B
+  if ((${#recent_items[@]})); then
+    choice=$(whiptail --title "Recent models" --menu "Pick a recent model + mmproj, or browse files." 0 0 0 \
+      "${recent_items[@]}" B "Browse files..." 3>&1 1>&2 2>&3) || cancel
+  fi
+
+  if [[ $choice == B ]]; then
+    [[ -n $has_model ]] || model=$(pick_gguf "Select model (.gguf)" "$MODELS_ROOT") || cancel
+    [[ -n $has_mmproj ]] || mmproj=$(pick_gguf "Select mmproj (.gguf)" "$(dirname "$model")" can_skip) || cancel
+  else
+    model=${recent_models[choice - 1]}
+    mmproj=${recent_mmprojs[choice - 1]}
+  fi
+
+  [[ -n $has_model ]] || picked_args+=(--model "$model")
+  if [[ -z $has_mmproj ]]; then
+    if [[ -n $mmproj ]]; then
+      picked_args+=(--mmproj "$mmproj")
+    else
+      picked_args+=(--no-mmproj)
+    fi
+  fi
 fi
 
 # Move this pick to the top, drop duplicates, keep the newest HISTORY_SIZE.
@@ -90,9 +164,6 @@ mkdir -p "${HISTORY_FILE%/*}"
   | awk -v max="$HISTORY_SIZE" '!seen[$0]++ && ++n <= max' > "$HISTORY_FILE.tmp"
 mv "$HISTORY_FILE.tmp" "$HISTORY_FILE"
 
-mmproj_args=(--no-mmproj)
-[[ -n $mmproj ]] && mmproj_args=(--mmproj "$mmproj")
-
 echo "model:  $model"
 echo "mmproj: ${mmproj:-none}"
 
@@ -100,9 +171,10 @@ echo "mmproj: ${mmproj:-none}"
 # instead of keeping them in per-thread arenas (RSS creeps up per image otherwise).
 export MALLOC_MMAP_THRESHOLD_=131072
 
+# llama.cpp keeps the last value of a repeated option,
+# so the config file overrides the defaults and the command line overrides both.
 exec "$LLAMA_BIN" serve \
-  --model "$model" \
-  "${mmproj_args[@]}" \
+  "${picked_args[@]}" \
   --host 127.0.0.1 \
   --port 8888 \
   --ctx-size 32768 \
@@ -111,4 +183,5 @@ exec "$LLAMA_BIN" serve \
   --no-cache-prompt \
   --cache-ram 0 \
   --ctx-checkpoints 0 \
-  "$@"
+  "${config_args[@]}" \
+  "${cli_args[@]}"

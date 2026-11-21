@@ -1,0 +1,11 @@
+# Copy this file to llama-server.args (next to the script) and edit it.
+# One llama serve option per line: "--option value" or "--option=value".
+# Blank lines and lines starting with "#" are skipped.
+# These override the script defaults; options on the command line override these.
+# When both the model and the mmproj choice are set here, the TUI is skipped.
+
+# --model /path/to/model.gguf
+# --mmproj /path/to/mmproj.gguf
+# --no-mmproj
+# --port 8888
+# --ctx-size=32768

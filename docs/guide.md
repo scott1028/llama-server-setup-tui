@@ -34,7 +34,7 @@ script 一開始用 `type -P llama` 在 `PATH` 上找 `llama` 執行檔，同名
 llama CLI not found in PATH. Install llama.cpp so that 'llama serve' works.
 ```
 
-`whiptail` 也會先檢查，缺少時印出 `whiptail not found. Install it, e.g. 'sudo apt install whiptail'.`。兩種情況都以 exit code 1 結束。
+`whiptail` 只在需要開選單時才檢查，缺少時印出 `whiptail not found. Install it, e.g. 'sudo apt install whiptail'.`。config 檔已經填好 model 和 mmproj 的話，沒裝 whiptail 也能跑。兩種錯誤都以 exit code 1 結束。
 
 ## 每天怎麼用
 
@@ -45,11 +45,15 @@ llama CLI not found in PATH. Install llama.cpp so that 'llama serve' works.
 ```text
 執行 script
   ▼
-有最近紀錄嗎？ ──沒有──► 跳到「選檔」
-  ▼ 有
+讀 config 檔（有的話）和命令列參數
+  ▼
+model 和 mmproj 都有了嗎？ ──都有──► 跳到「寫入紀錄」
+  ▼ 缺一個或兩個
+兩個都缺，而且有最近紀錄嗎？ ──不是──► 跳到「選檔」
+  ▼ 是
 Recent models ──選 1~5──► 跳到「寫入紀錄」
   ▼ 選 B
-選檔：Select model ─► Select mmproj
+選檔：只選還缺的（Select model、Select mmproj）
   ▼
 寫入紀錄 ─► 啟動 llama serve
 ```
@@ -57,13 +61,39 @@ Recent models ──選 1~5──► 跳到「寫入紀錄」
 任何一個畫面按 Esc 或 Cancel，都會印出 `Cancelled.` 並以 exit code 1 結束，紀錄檔不會改變。
 選檔畫面只列資料夾和 `.gguf`，`.gguf` 會顯示檔案大小。mmproj 畫面的第一項是 `(no mmproj)`。
 
-### 改預設參數
+### 用 config 檔預先填好參數
 
-接在 script 後面的參數會原封不動加在 `llama serve` 的最後面。同一個參數出現兩次時，llama.cpp 以後面那個為準，所以可以拿來覆蓋預設值：
+config 檔像一張事先填好的點餐單：常用的參數寫一次，每次啟動都會自動帶上。
 
 ```bash
-./llama-server-setup-tui.sh --port 8899 --ctx-size 16384
+cp llama-server.args.example llama-server.args
 ```
+
+把 `llama-server.args` 改成你要的參數，一行一個，例如：
+
+```text
+--model /media/T710_Data_ntfs/models/google/gemma-4-26B-A4B-it-qat-q4_0-gguf/gemma-4-26B_q4_0-it.gguf
+--mmproj /media/T710_Data_ntfs/models/google/gemma-4-26B-A4B-it-qat-q4_0-gguf/gemma-4-26B-it-mmproj.gguf
+--ctx-size=16384
+```
+
+model 和 mmproj 都填了，執行 script 就直接啟動，不會開選單。只填其中一個時，選單只會問你缺的那一個。
+想準備好幾份，例如每個 model 各一份，可以用 `--config` 指定要用哪一份：
+
+```bash
+./llama-server-setup-tui.sh --config presets/gemma4.args
+```
+
+### 誰蓋掉誰
+
+同一個參數出現兩次時，llama.cpp 以後面那個為準。script 照這個順序組指令，所以右邊會蓋掉左邊：
+
+```text
+選單選的 model / mmproj ─► script 預設 ─► config 檔 ─► 命令列
+```
+
+選單選的只有 model 和 mmproj，跟 script 預設不會重疊。
+接在 script 後面的參數（`--config` 除外）會原封不動加在最後面，例如 `./llama-server-setup-tui.sh --port 8899 --ctx-size 16384`。
 
 ## 參考
 
@@ -88,11 +118,21 @@ Recent models ──選 1~5──► 跳到「寫入紀錄」
 |---|---|---|
 | `MALLOC_MMAP_THRESHOLD_` | `131072` | 讓 glibc 用 mmap 配置 128 KiB 以上的記憶體，free 時直接還給系統，不會留在各個 thread 的 arena 裡 |
 
+### config 檔
+
+- 位置：script 所在資料夾的 `llama-server.args`，存在就載入，不存在就跳過。`llama-server.args` 已列在 `.gitignore`，範例在 `llama-server.args.example`。
+- `--config <檔案>` 或 `--config=<檔案>`：改用指定的檔案，預設的 `llama-server.args` 就不讀了。檔案不存在時印出 `Config file not found: <路徑>`；沒給路徑時印出 `--config needs a file path.`。兩種都以 exit code 1 結束。
+- 有載入時會先印出 `config: <路徑>`。
+- 一行一個參數，`--option value` 和 `--option=value` 都可以。`=` 的寫法會被拆成兩個參數，因為 llama.cpp 不接受 `--port=8899`（會回 `error: invalid argument: --port=8899`）。
+- 參數名稱到第一個空白或 `=` 為止，後面整段去掉前後空白就是值。值裡的空白、`=`、引號都原樣保留，例如 `--alias my model name`、`--override-kv a=int:1`。值不要加引號，否則引號也會被傳給 llama。
+- 空行和 `#` 開頭的行會跳過。寫在行尾的 `#` 不算註解。
+- 算作「已經給了 model」的寫法：`-m`、`--model`。算作「已經決定 mmproj」的寫法：`-mm`、`--mmproj`、`--no-mmproj`。config 檔和命令列都算；其他寫法（例如 `-hf`）不算，選單還是會問 model。
+
 ### 最近使用紀錄
 
 - 位置：script 所在資料夾的 `.cache/llama-server-history.tsv`。路徑用 `readlink -f` 算，從 symlink 執行也會存在同一個地方。`.cache/` 已列在 `.gitignore`。
 - 格式：一行一組 `model 路徑<TAB>mmproj 路徑`，最新的在最上面；選 `(no mmproj)` 時 mmproj 欄位是空的。
-- 寫入時機：選好之後、啟動 `llama serve` 之前，所以 server 啟動失敗也會留下紀錄。
+- 寫入時機：決定好 model 和 mmproj 之後、啟動 `llama serve` 之前，所以 server 啟動失敗也會留下紀錄。從 config 檔或命令列給的組合也會寫進去。
 - 更新規則：這一組移到最前面，重複的合併，最多保留 5 組（`HISTORY_SIZE`）。
 - 想清空：刪掉 `.cache/llama-server-history.tsv`。
 
@@ -114,4 +154,5 @@ Recent models ──選 1~5──► 跳到「寫入紀錄」
 - 選到分片 model 的其他片：llama.cpp 會馬上結束，錯誤訊息是 `illegal split file idx: 1 ... model must be loaded with the first split`。
 - `.` 開頭的資料夾和檔案不會列出來，例如 `~/.cache`、`~/.unsloth`。放在這些地方的 model 選不到。
 - script 不會檢查 mmproj 和 model 是否配對。
+- 想在 config 裡重新打開 prompt cache：SWA 架構的 model（例如 Gemma 4）除了 `--cache-prompt`，還要把 `--ctx-checkpoints` 設成大於 0，否則 `cache_n` 還是 `0`。實測同一張圖送兩次，Qwen3-VL 只加 `--cache-prompt`，第二次 `cache_n = 4072`；Gemma 4 再加 `--ctx-checkpoints 32`，第二次 `cache_n = 277`。
 - 紀錄裡的檔案已經不存在時（例如硬碟沒掛載），那一組不會顯示，但會留在紀錄檔裡繼續佔名額。
