@@ -5,8 +5,15 @@
 # e.g. --port 8899. When they already set the model and mmproj, no TUI is shown.
 set -euo pipefail
 
+# The shc-built binary has no BASH_SOURCE, and its $0 is a bare name when found on PATH.
+if [[ -n ${BASH_SOURCE[0]:-} ]]; then
+  self=${BASH_SOURCE[0]}
+else
+  self=$0
+  [[ $self == */* ]] || self=$(type -P "$self")
+fi
 # readlink -f keeps these next to the real script even when run through a symlink.
-SCRIPT_DIR=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+SCRIPT_DIR=$(dirname "$(readlink -f "$self")")
 # Loaded when present; --config <file> loads another file instead.
 DEFAULT_CONFIG="$SCRIPT_DIR/llama-server.args"
 # The file browser starts here; use ".." to go anywhere else.

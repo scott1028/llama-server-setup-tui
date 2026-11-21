@@ -12,19 +12,21 @@
 
 ## 需要什麼
 
-- Linux 和 bash
+- Linux x86_64 和 bash（Release 的 binary 是用 shc 把 script 包起來，執行時一樣會用到 bash）
 - llama.cpp 的 `llama` 指令在 `PATH` 上，而且有 `serve` 子命令（在 b10217 測過）
 - `whiptail`（Debian / Ubuntu：`sudo apt install whiptail`）
 - 放得下整個 model 的 GPU：script 帶 `--n-gpu-layers all`
 
 ## 五分鐘上手
 
-不用改任何設定，直接執行：
+從 [Releases](https://github.com/scott1028/llama-server-setup-tui/releases) 下載 `llama-server-setup-tui-<版本>-linux-x86_64`，不用改任何設定就能執行：
 
 ```bash
-cd llama-server-setup-tui
-./llama-server-setup-tui.sh
+chmod +x llama-server-setup-tui-v0.1.0-linux-x86_64
+./llama-server-setup-tui-v0.1.0-linux-x86_64
 ```
+
+也可以 clone 這個 repo 直接執行 `./llama-server-setup-tui.sh`，用法完全一樣。
 
 選檔畫面從家目錄開始，用 `..` 可以走到任何地方。用過一次之後，下次會先看到最近用過的組合：
 
@@ -39,7 +41,7 @@ cd llama-server-setup-tui
 
 直接按 Enter 就是上一次的組合；選 `B` 進選檔畫面。
 ↑↓ 移動，Enter 確定，Esc 取消。選完 model 會接著選 mmproj，從 model 所在的資料夾開始。
-想完全跳過選單：把 `llama-server.args.example` 複製成 `llama-server.args`，填好 `--model` 和 `--mmproj`（或 `--no-mmproj`）。
+想完全跳過選單：在執行檔旁邊建立 `llama-server.args`（格式照 `llama-server.args.example`），填好 `--model` 和 `--mmproj`（或 `--no-mmproj`）。
 
 ## 試一下
 
@@ -92,6 +94,7 @@ http://127.0.0.1:8888/v1
 - 最近使用紀錄存在哪、怎麼更新
 - 記憶體實測數字，以及為什麼要設 `MALLOC_MMAP_THRESHOLD_`
 - 幾種特殊情況和限制
+- 發布新版本：打 tag 之後 GitHub Actions 怎麼產生 binary
 
 ## 授權
 

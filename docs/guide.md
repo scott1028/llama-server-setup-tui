@@ -120,7 +120,7 @@ model 和 mmproj 都填了，執行 script 就直接啟動，不會開選單。�
 
 ### config 檔
 
-- 位置：script 所在資料夾的 `llama-server.args`，存在就載入，不存在就跳過。`llama-server.args` 已列在 `.gitignore`，範例在 `llama-server.args.example`。
+- 位置：script 或 binary 所在資料夾的 `llama-server.args`，存在就載入，不存在就跳過。`llama-server.args` 已列在 `.gitignore`，範例在 `llama-server.args.example`。
 - `--config <檔案>` 或 `--config=<檔案>`：改用指定的檔案，預設的 `llama-server.args` 就不讀了。檔案不存在時印出 `Config file not found: <路徑>`；沒給路徑時印出 `--config needs a file path.`。兩種都以 exit code 1 結束。
 - 有載入時會先印出 `config: <路徑>`。
 - 一行一個參數，`--option value` 和 `--option=value` 都可以。`=` 的寫法會被拆成兩個參數，因為 llama.cpp 不接受 `--port=8899`（會回 `error: invalid argument: --port=8899`）。
@@ -130,7 +130,7 @@ model 和 mmproj 都填了，執行 script 就直接啟動，不會開選單。�
 
 ### 最近使用紀錄
 
-- 位置：script 所在資料夾的 `.cache/llama-server-history.tsv`。路徑用 `readlink -f` 算，從 symlink 執行也會存在同一個地方。`.cache/` 已列在 `.gitignore`。
+- 位置：script 或 binary 所在資料夾的 `.cache/llama-server-history.tsv`。路徑用 `readlink -f` 算，從 symlink 執行也會存在同一個地方。`.cache/` 已列在 `.gitignore`。
 - 格式：一行一組 `model 路徑<TAB>mmproj 路徑`，最新的在最上面；選 `(no mmproj)` 時 mmproj 欄位是空的。
 - 寫入時機：決定好 model 和 mmproj 之後、啟動 `llama serve` 之前，所以 server 啟動失敗也會留下紀錄。從 config 檔或命令列給的組合也會寫進去。
 - 更新規則：這一組移到最前面，重複的合併，最多保留 5 組（`HISTORY_SIZE`）。
@@ -156,3 +156,18 @@ model 和 mmproj 都填了，執行 script 就直接啟動，不會開選單。�
 - script 不會檢查 mmproj 和 model 是否配對。
 - 想在 config 裡重新打開 prompt cache：SWA 架構的 model（例如 Gemma 4）除了 `--cache-prompt`，還要把 `--ctx-checkpoints` 設成大於 0，否則 `cache_n` 還是 `0`。實測同一張圖送兩次，Qwen3-VL 只加 `--cache-prompt`，第二次 `cache_n = 4072`；Gemma 4 再加 `--ctx-checkpoints 32`，第二次 `cache_n = 277`。
 - 紀錄裡的檔案已經不存在時（例如硬碟沒掛載），那一組不會顯示，但會留在紀錄檔裡繼續佔名額。
+
+## 發布新版本
+
+在要發布的 commit 打 tag 並 push，GitHub Actions（`.github/workflows/release.yml`）就會產生 binary 並建立 Release：
+
+```bash
+git tag -a v0.2.0 -m v0.2.0
+git push origin v0.2.0
+```
+
+- 觸發條件：push 符合 `v*` 的 tag。workflow 必須已經在那個 commit 裡。
+- 產物：`llama-server-setup-tui-<tag>-linux-x86_64` 和它的 `.sha256`，附在跟 tag 同名的 Release 上。只產生 x86_64。
+- 做法：用 Ubuntu 24.04 套件庫的 shc，以 `CFLAGS=-static shc -r` 編成靜態連結的 ELF。shc 看不懂 `#!/usr/bin/env bash`，所以先把第一行換成 `#!/bin/bash` 再編。
+- 執行 binary 時，裡面的 script 還是交給 `/bin/bash` 跑，也一樣需要 `whiptail`、`find`、`awk` 這些指令。
+- 建立 Release 之前會先做 smoke test：用一個假的 `llama` 和放在 binary 旁邊的 config 跑一次，確認組出來的 `llama serve` 指令正確。
