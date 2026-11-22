@@ -1,0 +1,40 @@
+# Inkling-2-Mini (unsloth UD-Q8_K_XL, mainline layout) in thinking mode, for coding agents.
+# Copy this file to llama-server.args (next to the script), or pass it with --config <file>.
+# One llama serve option per line: "--option value" or "--option=value".
+# Blank lines and lines starting with "#" are skipped.
+# These override the script defaults; options on the command line override these.
+
+# From Mainline_Support/ in unsloth/Inkling-2-Mini-GGUF, renamed from .gguf_file to .gguf.
+# The GGUFs at the repo root use Unsloth's own layout, and mainline llama.cpp fails to load them.
+# Needs llama.cpp b12627 or later (ggml-org/llama.cpp#32704); older builds give gibberish.
+# UD-Q8_K_XL is the full-precision quant (22.9 GB). On a smaller GPU use UD-Q4_K_XL (17.6 GB), the one unsloth recommends.
+--model /media/T710_Data_ntfs/models/unsloth/Inkling-2-Mini-GGUF/Inkling-2-Mini-UD-Q8_K_XL.gguf
+--mmproj /media/T710_Data_ntfs/models/unsloth/Inkling-2-Mini-GGUF/mmproj-F32.gguf
+# Text only: use this instead of --mmproj to free about 1.3 GB of VRAM.
+# --no-mmproj
+
+# Agent prompts grow every turn. Uses about 55 GB of VRAM; the compute buffer grows with the context,
+# so the model's full 1M would need about 155 GB.
+--ctx-size 256000
+
+# Prompt cache on: each turn only prefills what is new.
+--cache-prompt
+# Sliding-window attention plus a recurrent conv state: the cache can only be reused from a checkpoint.
+--ctx-checkpoints 32
+# Keeps the main conversation in RAM when a side request (title, subagent) takes the only slot.
+--cache-ram 16384
+
+# Thinking cannot be fully turned off. high (0.9) is the chat template default; xhigh and max are 0.99.
+# The model card warns of long reasoning loops when debugging code, so this stays at high.
+--reasoning on
+--reasoning-effort high
+# Sampling values from https://unsloth.ai/docs/models/inkling-2-mini (no truncation).
+# Sampling values sent in a request override these.
+--temp 1.0
+--top-p 1.0
+--top-k 0
+--min-p 0.0
+
+# DSpark speculative decoding: mainline llama.cpp cannot run the Inkling drafter yet (ggml-org/llama.cpp#32218).
+# --spec-type draft-dspark
+# --spec-draft-model /media/T710_Data_ntfs/models/unsloth/Inkling-2-Mini-GGUF/dspark-Inkling-2-Mini-Q8_0.gguf
